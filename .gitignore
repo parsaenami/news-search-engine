@@ -1,0 +1,18 @@
+# logs
+*.log
+
+# news data directory
+news
+
+# samples directory
+samples
+
+# IDE directories
+.idea
+.vscode
+
+# virtual environment
+.env
+
+# misc.
+__pycache__/
