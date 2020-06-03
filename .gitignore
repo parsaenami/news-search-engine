@@ -13,6 +13,8 @@ samples
 
 # virtual environment
 .env
+venv
+env
 
 # misc.
 __pycache__/
