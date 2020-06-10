@@ -13,9 +13,10 @@ import pandas as pd
 from inverted_index import InvertedIndex
 
 
-MODE = 1
+MODE = 1  # 1 or 2
 COMBINATIONS = None
 STOPWORDS = None
+# TODO: make it a file
 SIGNS = {'.', '‫‪،‬‬', '!', '؟', '?', ':', '؛', '(', ')', '{', '}', '[', ']', '«', '»', '-', '/', '\\' '٪', '%', '"', "'",
          '،', '_', '=', '<', '>', '+', '@', '$', '^', '*', ',', ';', '&', '#', '٬', '`', '|', ',', 'ْ', 'ٌ', 'ٍ', 'ً', 'ُ', 'ِ', 'َ', 'ّ', }
 FARSI_DIGITS = list("۱۲۳۴۵۶۷۸۹۰")
@@ -23,6 +24,7 @@ ENGLISH_DIGITS = list("1234567890")
 ARABIC_DIGITS = list("١٢٣٤٥٦٧٨٩٠")
 ZWNJ = '\u200C'
 ZWJ = '\u200D'
+# TODO: make it a file
 BAD_CHARS = {
     'ا': ['ا', 'إ', 'أ', 'ٱ'],
     'و': ['و', 'ؤ'],
@@ -218,7 +220,7 @@ def tokenize(text: str, mode: int) -> List[str]:
     2. Finds common combinations
     3. Drops stop words
     4. Stems each term
-    
+
     `mode` determines how you want to tokenize your data. It can be 1 (simple) or 2 (advanced).
 
     This function returns a `list` of strings as tokens.
