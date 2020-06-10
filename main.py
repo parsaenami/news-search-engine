@@ -1,15 +1,21 @@
 from __future__ import unicode_literals
+
 import hazm
 import parsivar
 import re
 import os
 
+from typing import List
 from bs4 import BeautifulSoup
+
 import pandas as pd
 
 from inverted_index import InvertedIndex
 
-STOPWORDS = hazm.stopwords_list()
+
+MODE = 1
+COMBINATIONS = None
+STOPWORDS = None
 SIGNS = {'.', '‫‪،‬‬', '!', '؟', '?', ':', '؛', '(', ')', '{', '}', '[', ']', '«', '»', '-', '/', '\\' '٪', '%', '"', "'",
          '،', '_', '=', '<', '>', '+', '@', '$', '^', '*', ',', ';', '&', '#', '٬', '`', '|', ',', 'ْ', 'ٌ', 'ٍ', 'ً', 'ُ', 'ِ', 'َ', 'ّ', }
 FARSI_DIGITS = list("۱۲۳۴۵۶۷۸۹۰")
@@ -23,7 +29,7 @@ BAD_CHARS = {
     'ی': ['ی', 'ي', 'ئ'],
     'ک': ['ک', 'ك'],
     'ه': ['ه', 'ة', 'ۀ', 'هٔ'],
-    ' ': SIGNS + FARSI_DIGITS + ENGLISH_DIGITS + ARABIC_DIGITS + [ZWJ],
+    ' ': list(SIGNS) + FARSI_DIGITS + ENGLISH_DIGITS + ARABIC_DIGITS + [ZWJ],
 }
 
 index = InvertedIndex()
@@ -40,28 +46,47 @@ tokenizer = hazm.WordTokenizer(
 )
 
 
-# done ?
+# done
 # test ?
-def fetch_data():
+def presets() -> None:
+    with open('preset\stopwords.txt', encoding='utf-8') as swf:
+        STOPWORDS = swf.read().split('\n')
+
+    with open('preset\combinations.txt', encoding='utf-8') as cf:
+        comb_temp = {}
+        data = cf.readlines()
+        for d in data:
+            combination = d.replace('\n', '').split(',')
+            if not len(combination) < 1:
+                comb_temp[combination[0]] = combination
+
+            COMBINATIONS = comb_temp
+
+
+# done
+# test ?
+def fetch_data() -> None:
     doc_id = 0
     data_files = os.listdir('news')
 
     for file in data_files:
         news_contents = pd.read_csv(file)['content']
         for nc in news_contents:
-            pass
+            tokens = tokenize(nc, mode=MODE)
+            indexing(doc_id, tokens)
+            doc_id += 1
 
 
 # done
 # test
-def remove_html_tags(html_input, remove_enters=False):
+def remove_html_tags(html_input: str, remove_enters=False) -> str:
     output = BeautifulSoup(html_input, features="html.parser").text
     return output.replace('\n', ' ') if remove_enters else output
 
 
 # done
-# test ?
-def remove_emoji(input_text):
+# test
+def remove_emoji(input_text: str) -> str:
     emoji_pattern = re.compile(
         "["
         u"\U0001F600-\U0001F64F"  # emoticons
@@ -75,71 +100,110 @@ def remove_emoji(input_text):
 
 # done
 # test ?
-def remove_bad_chars(text):
-    for dest_char in BAD_CHARS.keys():
-        for src_char in BAD_CHARS[dest_char]:
-            text = text.replace(src_char, dest_char)
+def remove_bad_chars(text: str, mode: int) -> str:
+    if mode == 1:
+        for dest_char in BAD_CHARS.keys():
+            for src_char in BAD_CHARS[dest_char]:
+                text = text.replace(src_char, dest_char)
+
+    elif mode == 2:
+        for _ in BAD_CHARS[' ']:
+            text = text.replace(_, ' ')
+
+    else:
+        print('Wrong tokenizing mode')
+
+    return text
 
 
 # done
-# test ?
-def is_stopword(term):
+# test
+def is_stopword(term: str) -> bool:
     return term in STOPWORDS
 
 
 # done
+# test
+def find_combination(text: str) -> str:
+    for comb in COMBINATIONS.keys():
+        for c in COMBINATIONS[comb]:
+            text.replace(c, comb.replace(' ', '_'))
+
+    return text
+
+
+# done
 # test ?
-def remove_english(text):
+def remove_english(text: str) -> str:
     return re.sub(r'[A-Za-z0-9]+', '', text)
 
 
 # done
 # test ?
-def correct_verbs(term):
+def correct_verbs(term: str) -> str:
     # text = text.replace(' می ', ' می' + ZWNJ)
     # text = text.replace(' نمی ', ' نمی' + ZWNJ)
-    term_stem = stemmer.convert_to_stem(term).split('&')
-    return term_stem[0], term_stem[1]
+    term_stem = term.split('&')
 
-
-# done ?
-# test ?
-def normalize(text, mode):
-    if mode == 1:
-        text = remove_html_tags(text, remove_enters=True)
-        for _ in BAD_CHARS[' ']:
-            text = text.replace(_, ' ')
-        
-
-    elif mode == 2:
-        remove_bad_chars(text)
-
+    if term_stem[0] in term:
+        return term_stem[0]
     else:
-        print('Wrong tokenizing mode')
+        return term_stem[1]
 
 
-# done ?
+# done
 # test ?
-def tokenize(text: str, mode: int) -> list:
+def normalize(text: str, mode: int) -> str:
+    text = remove_html_tags(text, remove_enters=True)
+    remove_bad_chars(text, mode=mode)
+
+    if mode == 2:
+        text = remove_english(text)
+        text = remove_emoji(text)
+
+    return text
+
+
+# done
+# test ?
+def tokenize(text: str, mode: int) -> List[str]:
+    text = normalize(text, mode=mode)
     tokens = set()
 
     if mode == 1:
         terms = text.split(' ')
         for term in terms:
             if not is_stopword(term):
-                tokens.append(term)
+                tokens.add(term)
 
-        return
     elif mode == 2:
+        text = find_combination(text)
         terms = tokenizer.tokenize(text)
         for term in terms:
-            pass
+            if not is_stopword(term):
+                tokens.add(stem(term))
 
     else:
         print('Wrong tokenizing mode')
 
+    return list(tokens)
 
-# done ?
+
+# done
 # test ?
-def stem(term):
-    pass
+def stem(term: str) -> str:
+    lemmatized = lemmatizer.lemmatize(term)
+    stemmed = stemmer.convert_to_stem(lemmatized)
+
+    if '&' in stemmed or '#' in stemmed:
+        stemmed = stemmed.replace('#', '&')
+        stemmed = correct_verbs(stemmed)
+
+    return stemmed
+
+
+# done
+# test ?
+def indexing(doc_id: int, tokens_list: list) -> None:
+    for pos, token in enumerate(tokens_list):
+        index.add(token, doc_id, pos)
