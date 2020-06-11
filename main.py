@@ -12,29 +12,30 @@ import pandas as pd
 
 from inverted_index import InvertedIndex
 
-
 MODE = 1  # 1 or 2
-COMBINATIONS = None
+# MODE = 2  # 1 or 2
+
+# DATA_PATH = './news'
+DATA_PATH = './mock'
+STOPWORDS_PATH = './preset/stopwords.txt'
+SIGNS_PATH = './preset/signs.txt'
+COMBINATIONS_PATH = './preset/combinations.txt'
+BAD_CHARS_PATH = './preset/bad_characters.txt'
+
 STOPWORDS = None
-# TODO: make it a file
-SIGNS = {'.', '‫‪،‬‬', '!', '؟', '?', ':', '؛', '(', ')', '{', '}', '[', ']', '«', '»', '-', '/', '\\' '٪', '%', '"', "'",
-         '،', '_', '=', '<', '>', '+', '@', '$', '^', '*', ',', ';', '&', '#', '٬', '`', '|', ',', 'ْ', 'ٌ', 'ٍ', 'ً', 'ُ', 'ِ', 'َ', 'ّ', }
+SIGNS = None
+COMBINATIONS = None
+BAD_CHARS = None
+
 FARSI_DIGITS = list("۱۲۳۴۵۶۷۸۹۰")
 ENGLISH_DIGITS = list("1234567890")
 ARABIC_DIGITS = list("١٢٣٤٥٦٧٨٩٠")
+
 ZWNJ = '\u200C'
 ZWJ = '\u200D'
-# TODO: make it a file
-BAD_CHARS = {
-    'ا': ['ا', 'إ', 'أ', 'ٱ'],
-    'و': ['و', 'ؤ'],
-    'ی': ['ی', 'ي', 'ئ'],
-    'ک': ['ک', 'ك'],
-    'ه': ['ه', 'ة', 'ۀ', 'هٔ'],
-    ' ': list(SIGNS) + FARSI_DIGITS + ENGLISH_DIGITS + ARABIC_DIGITS + [ZWJ],
-}
 
 index = InvertedIndex()
+
 hazm.Normalizer()
 stemmer = parsivar.FindStems()
 lemmatizer = hazm.Lemmatizer()
@@ -48,6 +49,14 @@ tokenizer = hazm.WordTokenizer(
 )
 
 
+def remove_duplicates(dup_list: list) -> list:
+    """
+    Removes duplicates from a list.
+    """
+
+    return list(set(dup_list))
+
+
 def presets() -> None:
     """
     Fetches presets from project directory.
@@ -55,20 +64,43 @@ def presets() -> None:
     Including:
     - Stop words
     - Common combinations
+    - Bad characters
+        - Numbers
+        - Punctuations
+        - Zero-width joiners
+        - Arabic characters
     """
 
-    with open('preset\stopwords.txt', encoding='utf-8') as swf:
+    with open(STOPWORDS_PATH, encoding='utf-8') as swf:
         STOPWORDS = swf.read().split('\n')
+        STOPWORDS = remove_duplicates(STOPWORDS)
 
-    with open('preset\combinations.txt', encoding='utf-8') as cf:
-        comb_temp = {}
+    with open(SIGNS_PATH, encoding='utf-8') as sf:
+        SIGNS = sf.read().split('\n')
+        SIGNS = remove_duplicates(SIGNS)
+
+    with open(COMBINATIONS_PATH, encoding='utf-8') as cf:
+        data_temp = {}
         data = cf.readlines()
         for d in data:
             combination = d.replace('\n', '').split(',')
             if not len(combination) < 1:
-                comb_temp[combination[0]] = combination
+                data_temp[combination[0]] = combination
 
-            COMBINATIONS = comb_temp
+        COMBINATIONS = data_temp
+
+    with open(BAD_CHARS_PATH, encoding='utf-8') as bcf:
+        data_temp = {}
+        data = bcf.readlines()
+        for d in data:
+            bad_char = d.replace('\n', '').split(',')
+            if not len(bad_char) < 1:
+                data_temp[bad_char[0]] = bad_char
+
+        BAD_CHARS = data_temp
+
+    BAD_CHARS[' '] = list(SIGNS) + FARSI_DIGITS + \
+        ENGLISH_DIGITS + ARABIC_DIGITS + [ZWJ]
 
 
 def fetch_data() -> None:
@@ -79,7 +111,7 @@ def fetch_data() -> None:
     """
 
     doc_id = 0
-    data_files = os.listdir('news')
+    data_files = os.listdir(DATA_PATH)
 
     for file in data_files:
         news_contents = pd.read_csv(file)['content']
@@ -96,8 +128,11 @@ def remove_html_tags(html_input: str, remove_enters=False) -> str:
     `remove_enters` replaces every `\\n` with space
     """
 
-    output = BeautifulSoup(html_input, features="html.parser").text
-    return output.replace('\n', ' ') if remove_enters else output
+    output = BeautifulSoup(html_input, features="html.parser")
+    for s in output.select('script'):
+        s.extract()
+
+    return output.text.replace('\n', ' ') if remove_enters else output.text
 
 
 def remove_emoji(input_text: str) -> str:
@@ -272,3 +307,21 @@ def indexing(doc_id: int, tokens_list: list) -> None:
 
     for pos, token in enumerate(tokens_list):
         index.add(token, doc_id, pos)
+
+
+def write_index_to_file(index: dict) -> None:
+    """
+    Writes the inverted index to a file for no reason.
+    
+    I just wanted to do this so I;d be able to see my inverted index.
+    """
+
+    with open('index.txt', 'w+') as f:
+        for term in index:  # each term in index
+            line = f"{term} -> "
+            for doc in index[term]:  # posting lists of each term
+                for pos in index[term][doc]:
+                    line += f"({posting}, {doc}), "
+
+            f.write(line[:-2])
+

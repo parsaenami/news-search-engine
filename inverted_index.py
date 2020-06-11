@@ -1,16 +1,17 @@
 from typing import List
 
+
 class InvertedIndex:
     """
     This class represents an inverted index object.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.posting_lists = {}
-        
+
     def __len__(self) -> int:
         return len(self.posting_lists)
-    
+
     def has_term(self, term: str) -> bool:
         """
         Tells if a word is present in the entire indexing list or not.
