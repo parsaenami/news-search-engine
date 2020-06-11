@@ -1,3 +1,5 @@
+import json
+
 from typing import List
 
 
@@ -6,11 +8,22 @@ class InvertedIndex:
     This class represents an inverted index object.
     """
 
+    docs = {}
+
     def __init__(self) -> None:
         self.posting_lists = {}
 
     def __len__(self) -> int:
         return len(self.posting_lists)
+
+    def load(self, src_path: str) -> None:
+        """
+        Loads an existing inverted index json file.
+        """
+
+        with open(src_path) as f:
+            data = json.load(f)
+            self.posting_lists = data
 
     def has_term(self, term: str) -> bool:
         """
