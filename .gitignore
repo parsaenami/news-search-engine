@@ -1,6 +1,14 @@
 # logs
 *.log
 
+# results
+index.txt
+index.json
+index-1.txt
+index-1.json
+index-2.txt
+index-2.json
+
 # news data directory
 news
 mock

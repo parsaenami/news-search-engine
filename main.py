@@ -4,6 +4,9 @@ import hazm
 import parsivar
 import re
 import os
+import sys
+import json
+from datetime import datetime
 
 from typing import List
 from bs4 import BeautifulSoup
@@ -12,31 +15,27 @@ import pandas as pd
 
 from inverted_index import InvertedIndex
 
-MODE = 1  # 1 or 2
+# MODE = 1  # 1 or 2
 # MODE = 2  # 1 or 2
 
-# DATA_PATH = './news'
-DATA_PATH = './mock'
+DATA_PATH = './news'
+# DATA_PATH = './mock'
 STOPWORDS_PATH = './preset/stopwords.txt'
 SIGNS_PATH = './preset/signs.txt'
 COMBINATIONS_PATH = './preset/combinations.txt'
 BAD_CHARS_PATH = './preset/bad_characters.txt'
 
-STOPWORDS = None
-SIGNS = None
-COMBINATIONS = None
-BAD_CHARS = None
-
 FARSI_DIGITS = list("۱۲۳۴۵۶۷۸۹۰")
 ENGLISH_DIGITS = list("1234567890")
 ARABIC_DIGITS = list("١٢٣٤٥٦٧٨٩٠")
 
-ZWNJ = '\u200C'
-ZWJ = '\u200D'
+ZWNJ = ['\u200C', '\u200F']
+ZWJ = ['\u200D']
+
+MISC_CHARS = ['\r', '\u00a0', '\xa0']
 
 index = InvertedIndex()
 
-hazm.Normalizer()
 stemmer = parsivar.FindStems()
 lemmatizer = hazm.Lemmatizer()
 tokenizer = hazm.WordTokenizer(
@@ -57,7 +56,7 @@ def remove_duplicates(dup_list: list) -> list:
     return list(set(dup_list))
 
 
-def presets() -> None:
+def presets() -> tuple:
     """
     Fetches presets from project directory.
 
@@ -71,15 +70,25 @@ def presets() -> None:
         - Arabic characters
     """
 
+    swt = None
+    st = None
+    ct = None
+    bct = None
+
     with open(STOPWORDS_PATH, encoding='utf-8') as swf:
-        STOPWORDS = swf.read().split('\n')
-        STOPWORDS = remove_duplicates(STOPWORDS)
+        print("Getting stopwords... ", end='')
+        swt = swf.read().split('\n')
+        swt = remove_duplicates(swt)
+        print("Done")
 
     with open(SIGNS_PATH, encoding='utf-8') as sf:
-        SIGNS = sf.read().split('\n')
-        SIGNS = remove_duplicates(SIGNS)
+        print("Getting signs... ", end='')
+        st = sf.read().split('\n')
+        st = remove_duplicates(st)
+        print("Done")
 
     with open(COMBINATIONS_PATH, encoding='utf-8') as cf:
+        print("Getting common combinations... ", end='')
         data_temp = {}
         data = cf.readlines()
         for d in data:
@@ -87,38 +96,60 @@ def presets() -> None:
             if not len(combination) < 1:
                 data_temp[combination[0]] = combination
 
-        COMBINATIONS = data_temp
+        ct = data_temp
+        print("Done")
 
     with open(BAD_CHARS_PATH, encoding='utf-8') as bcf:
+        print("Getting bad characters... ", end='')
         data_temp = {}
         data = bcf.readlines()
         for d in data:
             bad_char = d.replace('\n', '').split(',')
             if not len(bad_char) < 1:
-                data_temp[bad_char[0]] = bad_char
+                data_temp[bad_char[0]] = bad_char[1:]
 
-        BAD_CHARS = data_temp
+        bct = data_temp
+        print("Done")
 
-    BAD_CHARS[' '] = list(SIGNS) + FARSI_DIGITS + \
-        ENGLISH_DIGITS + ARABIC_DIGITS + [ZWJ]
+    bct[' '] = list(st) + FARSI_DIGITS + \
+        ENGLISH_DIGITS + ARABIC_DIGITS + ZWJ + MISC_CHARS
+    bct[ZWNJ[0]] = ZWNJ[1:]
+
+    return swt, st, ct, bct
 
 
-def fetch_data() -> None:
+stuff = presets()
+STOPWORDS = stuff[0]
+SIGNS = stuff[1]
+COMBINATIONS = stuff[2]
+BAD_CHARS = stuff[3]
+
+
+def process_data(mode: int) -> None:
     """
     Fetches data to crawl and create inverted index.
 
     Data is stored in .csv files. 
     """
+    print("Job started...")
 
     doc_id = 0
     data_files = os.listdir(DATA_PATH)
 
+    # presets()
+
     for file in data_files:
-        news_contents = pd.read_csv(file)['content']
+        news_contents = pd.read_csv(f'{DATA_PATH}/{file}')['content']
         for nc in news_contents:
-            tokens = tokenize(nc, mode=MODE)
+            print(f":: Doc {doc_id} ::")
+            tokens = my_tokenize(nc, mode=mode)
+            # print(tokens)
             indexing(doc_id, tokens)
             doc_id += 1
+
+    write_index_to_file(index.posting_lists, mode=mode)
+
+    print("Job done")
 
 
 def remove_html_tags(html_input: str, remove_enters=False) -> str:
@@ -131,6 +162,8 @@ def remove_html_tags(html_input: str, remove_enters=False) -> str:
     output = BeautifulSoup(html_input, features="html.parser")
     for s in output.select('script'):
         s.extract()
+
+    # print("Removing HTML tags... Done")
 
     return output.text.replace('\n', ' ') if remove_enters else output.text
 
@@ -148,6 +181,9 @@ def remove_emoji(input_text: str) -> str:
         u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
         "]+", flags=re.UNICODE
     )
+
+    # print("Removing emojis... Done")
+
     return emoji_pattern.sub(r'', input_text)  # no emoji
 
 
@@ -162,17 +198,19 @@ def remove_bad_chars(text: str, mode: int) -> str:
     `mode` determines how you want to tokenize your data. It can be 1 (simple) or 2 (advanced).
     """
 
-    if mode == 1:
-        for dest_char in BAD_CHARS.keys():
-            for src_char in BAD_CHARS[dest_char]:
-                text = text.replace(src_char, dest_char)
+    # if mode == 1:
+    for dest_char in BAD_CHARS.keys():
+        for src_char in BAD_CHARS[dest_char]:
+            text = text.replace(src_char, dest_char)
 
-    elif mode == 2:
-        for _ in BAD_CHARS[' ']:
-            text = text.replace(_, ' ')
+    # elif mode == 2:
+    #     for _ in BAD_CHARS[' ']:
+    #         text = text.replace(_, ' ')
 
-    else:
-        print('Wrong tokenizing mode')
+    # else:
+    #     print('Wrong tokenizing mode')
+
+    # print("Removing bad characters... Done")
 
     return text
 
@@ -194,6 +232,8 @@ def find_combination(text: str) -> str:
         for c in COMBINATIONS[comb]:
             text.replace(c, comb.replace(' ', '_'))
 
+    # print("Finding common combinations... Done")
+
     return text
 
 
@@ -202,10 +242,12 @@ def remove_english(text: str) -> str:
     Removes any English character appeared in text.
     """
 
+    # print("Removing English characters... Done")
+
     return re.sub(r'[A-Za-z0-9]+', '', text)
 
 
-def correct_verbs(term: str) -> str:
+def correct_verbs(term: str, main_verb: str) -> str:
     """
     Finds the root of a verb and returns it.
     """
@@ -214,7 +256,7 @@ def correct_verbs(term: str) -> str:
     # text = text.replace(' نمی ', ' نمی' + ZWNJ)
     term_stem = term.split('&')
 
-    if term_stem[0] in term:
+    if term_stem[0] in main_verb:
         return term_stem[0]
     else:
         return term_stem[1]
@@ -232,29 +274,26 @@ def normalize(text: str, mode: int) -> str:
     """
 
     text = remove_html_tags(text, remove_enters=True)
-    remove_bad_chars(text, mode=mode)
+    text = remove_bad_chars(text, mode=mode)
+    text = remove_english(text)
+    text = remove_emoji(text)
 
-    if mode == 2:
-        text = remove_english(text)
-        text = remove_emoji(text)
+    # if mode == 2:
+
+    # print("Normalizing... Done")
 
     return text
 
 
-def tokenize(text: str, mode: int) -> List[str]:
+def my_tokenize(text: str, mode: int) -> list:
     """
     Tokenizes the data of a document.
 
-    - mode 1
-    1. Normalizes the text
-    2. Splits tokens by space
-    3. Drops stop words
-
-    - mode 2
-    1. Normalizes the text
-    2. Finds common combinations
-    3. Drops stop words
-    4. Stems each term
+    - Normalizes the text
+    - Splits tokens by space
+    - Finds common combinations (mode 2 only)
+    - Drops stop words
+    - Stems each term (mode 2 only)
 
     `mode` determines how you want to tokenize your data. It can be 1 (simple) or 2 (advanced).
 
@@ -264,21 +303,25 @@ def tokenize(text: str, mode: int) -> List[str]:
     text = normalize(text, mode=mode)
     tokens = set()
 
-    if mode == 1:
-        terms = text.split(' ')
-        for term in terms:
-            if not is_stopword(term):
-                tokens.add(term)
-
-    elif mode == 2:
+    if mode == 2:
         text = find_combination(text)
-        terms = tokenizer.tokenize(text)
-        for term in terms:
-            if not is_stopword(term):
-                tokens.add(stem(term))
 
-    else:
-        print('Wrong tokenizing mode')
+    terms = text.split(' ')
+    for term in terms:
+        if not is_stopword(term):
+            tokens.add(term if mode == 1 else stem(term))
+
+    # elif mode == 2:
+    #     text = find_combination(text)
+    #     # terms = tokenizer.tokenize(text)
+    #     for term in terms:
+    #         if not is_stopword(term):
+    #             tokens.add(stem(term))
+
+    # else:
+    #     print('Wrong tokenizing mode')
+
+    # print("Tokenizing... Done")
 
     return list(tokens)
 
@@ -293,7 +336,7 @@ def stem(term: str) -> str:
 
     if '&' in stemmed or '#' in stemmed:
         stemmed = stemmed.replace('#', '&')
-        stemmed = correct_verbs(stemmed)
+        stemmed = correct_verbs(stemmed, term)
 
     return stemmed
 
@@ -309,19 +352,36 @@ def indexing(doc_id: int, tokens_list: list) -> None:
         index.add(token, doc_id, pos)
 
 
-def write_index_to_file(index: dict) -> None:
+def write_index_to_file(index: dict, mode: int) -> None:
     """
     Writes the inverted index to a file for no reason.
-    
-    I just wanted to do this so I;d be able to see my inverted index.
+
+    I just wanted to do this so I'd be able to see my inverted index.
     """
 
-    with open('index.txt', 'w+') as f:
+    if "" in index.keys():
+        index.pop("")
+
+    with open(f'index-{mode}.json', 'wb+') as jf:
+        jf.write(json.dumps(index).encode("utf8"))
+
+    with open(f'index-{mode}.txt', 'wb+') as f:
         for term in index:  # each term in index
             line = f"{term} -> "
             for doc in index[term]:  # posting lists of each term
                 for pos in index[term][doc]:
-                    line += f"({posting}, {doc}), "
+                    line += f"({doc}, {pos}), "
 
-            f.write(line[:-2])
+            f.write(line[:-2].encode("utf8"))
+            f.write(b'\n' + 40 * b'-' + b'\n')
+            # f.write(b'\n')
 
+    # print("Writing index to file... Done")
+
+
+if __name__ == "__main__":
+    MODE = int(sys.argv[1])
+    start_time = datetime.now()
+    process_data(MODE)
+    end_time = datetime.now()
+    print(f'\nProcess completed in {str(end_time - start_time)}')
