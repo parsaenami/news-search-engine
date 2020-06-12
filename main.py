@@ -409,13 +409,13 @@ def pseudo_query(term: str, query_mode: int) -> list:
     """
 
     out = []
-    if index.has_term(term) or query_mode in [4, 5]:
+    if index.has_term(term) or query_mode in [4, 5, 6]:
         if query_mode == 0:  # docs of a term
             out = index.get_docs(term)
 
         elif query_mode == 1:  # docs + positions of a term
             for doc in index.get_docs(term):
-                for pos in index.posting_lists[term][doc].keys():
+                for pos in index.posting_lists[term][doc]:
                     out.append((doc, pos))
 
         elif query_mode == 2:  # doc frequency of a term
@@ -425,7 +425,7 @@ def pseudo_query(term: str, query_mode: int) -> list:
             for doc in index.get_docs(term):
                 out.append((doc, index.term_frequency(term, doc)))
 
-            out = len(out)
+            out = [sum([x[1] for x in out])]
 
         elif query_mode == 4:  # n most frequent terms (docs only)
             doc_freq = {}
@@ -447,25 +447,22 @@ def pseudo_query(term: str, query_mode: int) -> list:
             pos_freq = dict_value_sort(pos_freq)
             out = dict_end_slice(pos_freq, int(term))
 
+        elif query_mode == 6:
+            print('Not implemented yet...')
+
+        else:
+            print('Wrong query mode, select again.')
+
     else:
         print(f"{term} doesn't exist :(")
 
     return out
 
 
-if __name__ == "__main__":
-    MODE = int(sys.argv[1])
-    want_load = input('Do you want to load an existing index file? (y/n): ')
-    if want_load == 'y':
-        path = input("Enter your json file path: ")
-        start_time = datetime.now()
-        index.load(path)
-    else:
-        start_time = datetime.now()
-        process_data(MODE)
-
-    end_time = datetime.now()
-    print(f'\nProcess completed in {str(end_time - start_time)}')
+def ask_query():
+    """
+    Gets queries from user and returns the result.
+    """
 
     hint = "\n0 -> docs of a term\n"
     hint += "1 -> docs + positions of a term\n"
@@ -473,7 +470,9 @@ if __name__ == "__main__":
     hint += "3 -> term frequency\n"
     hint += "4 -> n most frequent terms (docs only)\n"
     hint += "5 -> m most frequent terms (docs + positions)\n"
+    hint += "6 -> Advanced query (not implemented yet)\n"
     hint += "# -> Exit\n"
+
     while True:
         q_mode = input(hint + '>>> ')
         if q_mode == '#':
@@ -486,3 +485,21 @@ if __name__ == "__main__":
         result = pseudo_query(q_term, q_mode)
         print(result)
         print(40 * '-')
+
+
+if __name__ == "__main__":
+    MODE = int(sys.argv[1])
+    want_load = input('Do you want to load an existing index file? (y/n): ')
+
+    if want_load == 'y':
+        path = input("Enter your json file path: ")
+        start_time = datetime.now()
+        index.load(path)
+    else:
+        start_time = datetime.now()
+        process_data(MODE)
+
+    end_time = datetime.now()
+    print(f'\nProcess completed in {str(end_time - start_time)}')
+
+    ask_query()
