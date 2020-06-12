@@ -379,9 +379,110 @@ def write_index_to_file(index: dict, mode: int) -> None:
     # print("Writing index to file... Done")
 
 
+def dict_value_sort(x: dict) -> dict:
+    """
+    Sorts a dictionary by its values.
+    """
+
+    return {k: v for k, v in sorted(x.items(), key=lambda item: item[1])}
+
+
+def dict_end_slice(x: dict, n: int) -> list:
+    """
+    Gives us the last `n` items of a dictionary.
+    """
+
+    return list(x.items())[n * -1:]
+
+
+def pseudo_query(term: str, query_mode: int) -> list:
+    """
+    A simple query asking function.
+
+    query modes:
+    - `0`-> docs of a term
+    - `1`-> docs + positions of a term
+    - `2`-> doc frequency of a term
+    - `3`-> term frequency
+    - `4`-> n most frequent terms (docs only)
+    - `5`-> m most frequent terms (docs + positions)
+    """
+
+    out = []
+    if index.has_term(term) or query_mode in [4, 5]:
+        if query_mode == 0:  # docs of a term
+            out = index.get_docs(term)
+
+        elif query_mode == 1:  # docs + positions of a term
+            for doc in index.get_docs(term):
+                for pos in index.posting_lists[term][doc].keys():
+                    out.append((doc, pos))
+
+        elif query_mode == 2:  # doc frequency of a term
+            out.append(index.doc_frequency(term))
+
+        elif query_mode == 3:  # term frequency
+            for doc in index.get_docs(term):
+                out.append((doc, index.term_frequency(term, doc)))
+
+            out = len(out)
+
+        elif query_mode == 4:  # n most frequent terms (docs only)
+            doc_freq = {}
+            for t in index.posting_lists:
+                doc_freq[t] = len(index.posting_lists[t])
+
+            doc_freq = dict_value_sort(doc_freq)
+            out = dict_end_slice(doc_freq, int(term))
+
+        elif query_mode == 5:  # m most frequent terms (docs + positions)
+            pos_freq = {}
+            for t in index.posting_lists:
+                freq = 0
+                for doc in index.get_docs(t):
+                    freq += len(index.posting_lists[t][doc])
+
+                pos_freq[t] = freq
+
+            pos_freq = dict_value_sort(pos_freq)
+            out = dict_end_slice(pos_freq, int(term))
+
+    else:
+        print(f"{term} doesn't exist :(")
+
+    return out
+
+
 if __name__ == "__main__":
     MODE = int(sys.argv[1])
-    start_time = datetime.now()
-    process_data(MODE)
+    want_load = input('Do you want to load an existing index file? (y/n): ')
+    if want_load == 'y':
+        path = input("Enter your json file path: ")
+        start_time = datetime.now()
+        index.load(path)
+    else:
+        start_time = datetime.now()
+        process_data(MODE)
+
     end_time = datetime.now()
     print(f'\nProcess completed in {str(end_time - start_time)}')
+
+    hint = "\n0 -> docs of a term\n"
+    hint += "1 -> docs + positions of a term\n"
+    hint += "2 -> doc frequency of a term\n"
+    hint += "3 -> term frequency\n"
+    hint += "4 -> n most frequent terms (docs only)\n"
+    hint += "5 -> m most frequent terms (docs + positions)\n"
+    hint += "# -> Exit\n"
+    while True:
+        q_mode = input(hint + '>>> ')
+        if q_mode == '#':
+            break
+        else:
+            q_mode = int(q_mode)
+
+        q_term = input('Search: ')
+
+        result = pseudo_query(q_term, q_mode)
+        print(result)
+        print(40 * '-')
