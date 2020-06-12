@@ -2,12 +2,9 @@
 *.log
 
 # results
-index.txt
-index.json
-index-1.txt
-index-1.json
-index-2.txt
-index-2.json
+index*.*
+mock*.*
+*.json
 
 # news data directory
 news
@@ -27,3 +24,4 @@ env
 
 # misc.
 __pycache__/
+all.txt

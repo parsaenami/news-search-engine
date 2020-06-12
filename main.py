@@ -15,9 +15,6 @@ import pandas as pd
 
 from inverted_index import InvertedIndex
 
-# MODE = 1  # 1 or 2
-# MODE = 2  # 1 or 2
-
 DATA_PATH = './news'
 # DATA_PATH = './mock'
 STOPWORDS_PATH = './preset/stopwords.txt'
@@ -33,6 +30,11 @@ ZWNJ = ['\u200C', '\u200F']
 ZWJ = ['\u200D']
 
 MISC_CHARS = ['\r', '\u00a0', '\xa0']
+
+TEST = [
+    'گفت', 'گو', 'رود', 'رو', 'خواه', 'سپاس', 'هنر', 'شریف', 'دوست', 'یاد', 'توان', 'شنو', 'کرد', 'ساز', 'دان'
+]
+TEST_RES = {}
 
 index = InvertedIndex()
 
@@ -131,17 +133,17 @@ def process_data(mode: int) -> None:
 
     Data is stored in .csv files. 
     """
+
     print("Job started...")
 
     doc_id = 0
     data_files = os.listdir(DATA_PATH)
 
-    # presets()
-
     for file in data_files:
         news_contents = pd.read_csv(f'{DATA_PATH}/{file}')['content']
         for nc in news_contents:
-            print(f":: Doc {doc_id} ::")
+            if not doc_id % 1000:
+                print(f":: Doc {doc_id} ::")
             tokens = my_tokenize(nc, mode=mode)
             # print(tokens)
             indexing(doc_id, tokens)
@@ -198,17 +200,9 @@ def remove_bad_chars(text: str, mode: int) -> str:
     `mode` determines how you want to tokenize your data. It can be 1 (simple) or 2 (advanced).
     """
 
-    # if mode == 1:
     for dest_char in BAD_CHARS.keys():
         for src_char in BAD_CHARS[dest_char]:
             text = text.replace(src_char, dest_char)
-
-    # elif mode == 2:
-    #     for _ in BAD_CHARS[' ']:
-    #         text = text.replace(_, ' ')
-
-    # else:
-    #     print('Wrong tokenizing mode')
 
     # print("Removing bad characters... Done")
 
@@ -230,7 +224,7 @@ def find_combination(text: str) -> str:
 
     for comb in COMBINATIONS.keys():
         for c in COMBINATIONS[comb]:
-            text.replace(c, comb.replace(' ', '_'))
+            text = text.replace(c, comb.replace(' ', '_'))
 
     # print("Finding common combinations... Done")
 
@@ -252,8 +246,6 @@ def correct_verbs(term: str, main_verb: str) -> str:
     Finds the root of a verb and returns it.
     """
 
-    # text = text.replace(' می ', ' می' + ZWNJ)
-    # text = text.replace(' نمی ', ' نمی' + ZWNJ)
     term_stem = term.split('&')
 
     if term_stem[0] in main_verb:
@@ -278,8 +270,6 @@ def normalize(text: str, mode: int) -> str:
     text = remove_english(text)
     text = remove_emoji(text)
 
-    # if mode == 2:
-
     # print("Normalizing... Done")
 
     return text
@@ -301,7 +291,7 @@ def my_tokenize(text: str, mode: int) -> list:
     """
 
     text = normalize(text, mode=mode)
-    tokens = set()
+    tokens = []
 
     if mode == 2:
         text = find_combination(text)
@@ -309,21 +299,11 @@ def my_tokenize(text: str, mode: int) -> list:
     terms = text.split(' ')
     for term in terms:
         if not is_stopword(term):
-            tokens.add(term if mode == 1 else stem(term))
-
-    # elif mode == 2:
-    #     text = find_combination(text)
-    #     # terms = tokenizer.tokenize(text)
-    #     for term in terms:
-    #         if not is_stopword(term):
-    #             tokens.add(stem(term))
-
-    # else:
-    #     print('Wrong tokenizing mode')
+            tokens.append(term if mode == 1 else stem(term))
 
     # print("Tokenizing... Done")
 
-    return list(tokens)
+    return tokens
 
 
 def stem(term: str) -> str:
@@ -337,6 +317,10 @@ def stem(term: str) -> str:
     if '&' in stemmed or '#' in stemmed:
         stemmed = stemmed.replace('#', '&')
         stemmed = correct_verbs(stemmed, term)
+
+    if stemmed in TEST:
+        TEST_RES.setdefault(stemmed, []).append(term)
+        TEST_RES[stemmed] = remove_duplicates(TEST_RES[stemmed])
 
     return stemmed
 
@@ -363,7 +347,14 @@ def write_index_to_file(index: dict, mode: int) -> None:
         index.pop("")
 
     with open(f'index-{mode}.json', 'wb+') as jf:
-        jf.write(json.dumps(index).encode("utf8"))
+        data_temp = json.dumps(index, ensure_ascii=False)
+        buff_size = len(data_temp) // 10 ** 4
+
+        for i in range(0, len(data_temp), buff_size):
+            jf.write(data_temp[i:i + buff_size].encode("utf8"))
+
+    with open(f'test-words-{mode}.json', 'wb+') as tf:
+        tf.write(json.dumps(TEST_RES, ensure_ascii=False).encode("utf8"))
 
     with open(f'index-{mode}.txt', 'wb+') as f:
         for term in index:  # each term in index
@@ -374,7 +365,6 @@ def write_index_to_file(index: dict, mode: int) -> None:
 
             f.write(line[:-2].encode("utf8"))
             f.write(b'\n' + 40 * b'-' + b'\n')
-            # f.write(b'\n')
 
     # print("Writing index to file... Done")
 
@@ -488,7 +478,8 @@ def ask_query():
 
 
 if __name__ == "__main__":
-    MODE = int(sys.argv[1])
+    # MODE = int(sys.argv[1])
+    MODE = 2
     want_load = input('Do you want to load an existing index file? (y/n): ')
 
     if want_load == 'y':
