@@ -17,10 +17,12 @@ from inverted_index import InvertedIndex
 
 DATA_PATH = './news'
 # DATA_PATH = './mock'
+
 STOPWORDS_PATH = './preset/stopwords.txt'
 SIGNS_PATH = './preset/signs.txt'
 COMBINATIONS_PATH = './preset/combinations.txt'
 BAD_CHARS_PATH = './preset/bad_characters.txt'
+TEST_PATH = './preset/test.txt'
 
 FARSI_DIGITS = list("۱۲۳۴۵۶۷۸۹۰")
 ENGLISH_DIGITS = list("1234567890")
@@ -31,9 +33,6 @@ ZWJ = ['\u200D']
 
 MISC_CHARS = ['\r', '\u00a0', '\xa0']
 
-TEST = [
-    'گفت', 'گو', 'رود', 'رو', 'خواه', 'سپاس', 'هنر', 'شریف', 'دوست', 'یاد', 'توان', 'شنو', 'کرد', 'ساز', 'دان'
-]
 TEST_RES = {}
 
 index = InvertedIndex()
@@ -76,11 +75,18 @@ def presets() -> tuple:
     st = None
     ct = None
     bct = None
+    tt = None
 
     with open(STOPWORDS_PATH, encoding='utf-8') as swf:
         print("Getting stopwords... ", end='')
         swt = swf.read().split('\n')
         swt = remove_duplicates(swt)
+        print("Done")
+
+    with open(TEST_PATH, encoding='utf-8') as tf:
+        print("Getting test words... ", end='')
+        tt = tf.read().split('\n')
+        tt = remove_duplicates(tt)
         print("Done")
 
     with open(SIGNS_PATH, encoding='utf-8') as sf:
@@ -117,7 +123,7 @@ def presets() -> tuple:
         ENGLISH_DIGITS + ARABIC_DIGITS + ZWJ + MISC_CHARS
     bct[ZWNJ[0]] = ZWNJ[1:]
 
-    return swt, st, ct, bct
+    return swt, st, ct, bct, tt
 
 
 stuff = presets()
@@ -125,6 +131,7 @@ STOPWORDS = stuff[0]
 SIGNS = stuff[1]
 COMBINATIONS = stuff[2]
 BAD_CHARS = stuff[3]
+TEST = stuff[4]
 
 
 def process_data(mode: int) -> None:
@@ -231,6 +238,17 @@ def find_combination(text: str) -> str:
     return text
 
 
+def remove_extra_zwnj(text: str) -> str:
+    """
+    Removes any extra ZWNJ.
+    """
+
+    while ZWNJ+ZWNJ in text:
+        text = text.replace(ZWNJ+ZWNJ, ZWNJ)
+    
+    return text
+
+
 def remove_english(text: str) -> str:
     """
     Removes any English character appeared in text.
@@ -269,6 +287,7 @@ def normalize(text: str, mode: int) -> str:
     text = remove_bad_chars(text, mode=mode)
     text = remove_english(text)
     text = remove_emoji(text)
+    text = remove_extra_zwnj(text)
 
     # print("Normalizing... Done")
 
