@@ -6,6 +6,7 @@ import re
 import os
 import sys
 import json
+import random
 from datetime import datetime
 
 from typing import List
@@ -134,7 +135,7 @@ BAD_CHARS = stuff[3]
 TEST = stuff[4]
 
 
-def process_data(mode: int) -> None:
+def process_data(mode: int, analyze: int, sample_rate=None) -> None:
     """
     Fetches data to crawl and create inverted index.
 
@@ -143,18 +144,39 @@ def process_data(mode: int) -> None:
 
     print("Job started...")
 
-    doc_id = 0
+    # doc_id = 0
     data_files = os.listdir(DATA_PATH)
+    data = []
+    heaps = []
+    _tokens = 0
+    _vocab = 0
 
     for file in data_files:
         news_contents = pd.read_csv(f'{DATA_PATH}/{file}')['content']
         for nc in news_contents:
-            if not doc_id % 1000:
-                print(f":: Doc {doc_id} ::")
-            tokens = my_tokenize(nc, mode=mode)
-            # print(tokens)
-            indexing(doc_id, tokens)
-            doc_id += 1
+            data.append(nc)
+
+    if analyze == 1:
+        data = random.sample(data, sample_rate)
+
+    for i, d in enumerate(data):
+        # if not i % 1000:
+        #     print(f":: Doc {i} ::")
+            
+        tokens = my_tokenize(d, mode=mode)
+
+        indexing(i, tokens)
+
+        if analyze == 1:
+            _tokens += len(tokens)
+            _vocab = len(index)
+            heaps.append(f'{_tokens},{_vocab}')
+
+        # doc_id += 1
+    
+    if analyze == 1:
+        with open(f'./heaps-{mode}-{sample_rate}.txt', 'w+') as f:
+            f.write('\n'.join(heaps))
 
     write_index_to_file(index.posting_lists, mode=mode)
 
@@ -240,11 +262,11 @@ def find_combination(text: str) -> str:
 
 def remove_extra_zwnj(text: str) -> str:
     """
-    Removes any extra ZWNJ.
+    Removes any extra ZWNJ, but cannot find REALLY extra ZWNJs.
     """
 
-    while ZWNJ+ZWNJ in text:
-        text = text.replace(ZWNJ+ZWNJ, ZWNJ)
+    while ZWNJ[0]+ZWNJ[0] in text:
+        text = text.replace(ZWNJ[0]+ZWNJ[0], ZWNJ[0])
     
     return text
 
@@ -366,7 +388,7 @@ def write_index_to_file(index: dict, mode: int) -> None:
         index.pop("")
 
     with open(f'index-{mode}.json', 'wb+') as jf:
-        data_temp = json.dumps(index, ensure_ascii=False)
+        data_temp = json.dumps(index)
         buff_size = len(data_temp) // 10 ** 4
 
         for i in range(0, len(data_temp), buff_size):
@@ -497,8 +519,13 @@ def ask_query():
 
 
 if __name__ == "__main__":
-    # MODE = int(sys.argv[1])
-    MODE = 2
+    MODE = int(sys.argv[1])
+    ANALYZE = int(sys.argv[2])  # 0: None | 1: Heap's Law | 2: Zipf's Law
+    SAMPLE_RATE = None
+
+    if ANALYZE == 1:
+        SAMPLE_RATE = int(sys.argv[3])
+
     want_load = input('Do you want to load an existing index file? (y/n): ')
 
     if want_load == 'y':
@@ -507,7 +534,7 @@ if __name__ == "__main__":
         index.load(path)
     else:
         start_time = datetime.now()
-        process_data(MODE)
+        process_data(MODE, ANALYZE, SAMPLE_RATE)
 
     end_time = datetime.now()
     print(f'\nProcess completed in {str(end_time - start_time)}')

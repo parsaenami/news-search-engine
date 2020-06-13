@@ -4,9 +4,15 @@
 # results
 index*.*
 mock*.*
+heap*.*
 *.json
+*.pdf
 
-# news data directory
+# compressed files
+*.zip
+*.rar
+
+# data directory
 news
 mock
 
