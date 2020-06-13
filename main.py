@@ -154,15 +154,19 @@ def process_data(mode: int, analyze: int, sample_rate=None) -> None:
     for file in data_files:
         news_contents = pd.read_csv(f'{DATA_PATH}/{file}')['content']
         for nc in news_contents:
+            # I used to do all the science here...
+            # but that heap guy made me do this horrible move: 
+            # At first I save documents in a list and then iterate
+            # it again to make the job done. What an overhead...
             data.append(nc)
 
-    if analyze == 1:
+    if analyze:
         data = random.sample(data, sample_rate)
 
     for i, d in enumerate(data):
         # if not i % 1000:
         #     print(f":: Doc {i} ::")
-            
+
         tokens = my_tokenize(d, mode=mode)
 
         indexing(i, tokens)
@@ -173,7 +177,7 @@ def process_data(mode: int, analyze: int, sample_rate=None) -> None:
             heaps.append(f'{_tokens},{_vocab}')
 
         # doc_id += 1
-    
+
     if analyze == 1:
         with open(f'./heaps-{mode}-{sample_rate}.txt', 'w+') as f:
             f.write('\n'.join(heaps))
@@ -267,7 +271,7 @@ def remove_extra_zwnj(text: str) -> str:
 
     while ZWNJ[0]+ZWNJ[0] in text:
         text = text.replace(ZWNJ[0]+ZWNJ[0], ZWNJ[0])
-    
+
     return text
 
 
@@ -523,7 +527,7 @@ if __name__ == "__main__":
     ANALYZE = int(sys.argv[2])  # 0: None | 1: Heap's Law | 2: Zipf's Law
     SAMPLE_RATE = None
 
-    if ANALYZE == 1:
+    if ANALYZE:
         SAMPLE_RATE = int(sys.argv[3])
 
     want_load = input('Do you want to load an existing index file? (y/n): ')
@@ -538,5 +542,13 @@ if __name__ == "__main__":
 
     end_time = datetime.now()
     print(f'\nProcess completed in {str(end_time - start_time)}')
+
+    if ANALYZE == 2:
+        _freq_words = pseudo_query(len(index), query_mode=5)
+        _freq_words.reverse()
+        freq_words = [f'{i},{str(w[1])}' for i, w in enumerate(_freq_words)]
+
+        with open(f'./zipf-{MODE}-{SAMPLE_RATE}.txt', 'w+') as zf:
+            zf.write('\n'.join(freq_words))
 
     ask_query()

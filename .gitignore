@@ -5,8 +5,12 @@
 index*.*
 mock*.*
 heap*.*
+zipf*.*
 *.json
+
+# reports
 *.pdf
+*.docx
 
 # compressed files
 *.zip
