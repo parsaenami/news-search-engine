@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import random
+import codecs
 from datetime import datetime
 
 from typing import List
@@ -16,8 +17,9 @@ import pandas as pd
 
 from inverted_index import InvertedIndex
 
-DATA_PATH = './news'
-# DATA_PATH = './mock'
+# DATA_PATH = './news'
+DATA_PATH = './mock/txt'
+# DATA_PATH = './mock/csv'
 
 STOPWORDS_PATH = './preset/stopwords.txt'
 SIGNS_PATH = './preset/signs.txt'
@@ -151,16 +153,20 @@ def process_data(mode: int, analyze: int, sample_rate=None) -> None:
     _tokens = 0
     _vocab = 0
 
-    for file in data_files:
-        news_contents = pd.read_csv(f'{DATA_PATH}/{file}')['content']
-        for nc in news_contents:
-            # I used to do all the science here...
-            # but that heap guy made me do this horrible move: 
-            # At first I save documents in a list and then iterate
-            # it again to make the job done. What an overhead...
-            data.append(nc)
+    # for file in data_files:
+    #     news_contents = pd.read_csv(f'{DATA_PATH}/{file}')['content']
+    #     for nc in news_contents:
+    #         # I used to do all the science here...
+    #         # but that heap guy made me do this horrible move:
+    #         # At first I save documents in a list and then iterate
+    #         # it again to make the job done. What an overhead...
+    #         data.append(nc)
 
-    if analyze:
+    for file in data_files:
+        with codecs.open(f'{DATA_PATH}/{file}', 'r', 'utf-8') as f:
+            data = f.readlines()
+
+    if analyze == 1:
         data = random.sample(data, sample_rate)
 
     for i, d in enumerate(data):
@@ -340,11 +346,15 @@ def my_tokenize(text: str, mode: int) -> list:
 
     if mode == 2:
         text = find_combination(text)
+        terms = tokenizer.tokenize(text)
+    else:
+        terms = text.split(' ')
 
-    terms = text.split(' ')
     for term in terms:
         if not is_stopword(term):
-            tokens.append(term if mode == 1 else stem(term))
+            if not is_stopword(stem(term)):
+                stemmed_one = stem(term)
+            tokens.append(term if mode == 1 else stemmed_one)
 
     # print("Tokenizing... Done")
 
@@ -381,31 +391,35 @@ def indexing(doc_id: int, tokens_list: list) -> None:
         index.add(token, doc_id, pos)
 
 
-def write_index_to_file(index: dict, mode: int) -> None:
+def write_index_to_file(_index: dict, mode: int) -> None:
     """
     Writes the inverted index to a file for no reason.
 
     I just wanted to do this so I'd be able to see my inverted index.
     """
 
-    if "" in index.keys():
-        index.pop("")
+    _index = dict(sorted(_index.items()))
 
-    with open(f'index-{mode}.json', 'wb+') as jf:
-        data_temp = json.dumps(index)
+    if "" in _index.keys():
+        _index.pop("")
+
+    with open(f'xindex-{mode}.json', 'wb+') as jf:
+        data_temp = json.dumps(_index)
         buff_size = len(data_temp) // 10 ** 4
+        if buff_size == 0:
+            buff_size = 1
 
         for i in range(0, len(data_temp), buff_size):
             jf.write(data_temp[i:i + buff_size].encode("utf8"))
 
-    with open(f'test-words-{mode}.json', 'wb+') as tf:
+    with open(f'xtest-words-{mode}.json', 'wb+') as tf:
         tf.write(json.dumps(TEST_RES, ensure_ascii=False).encode("utf8"))
 
-    with open(f'index-{mode}.txt', 'wb+') as f:
-        for term in index:  # each term in index
+    with open(f'xindex-{mode}.txt', 'wb+') as f:
+        for term in _index:  # each term in index
             line = f"{term} -> "
-            for doc in index[term]:  # posting lists of each term
-                for pos in index[term][doc]:
+            for doc in _index[term]:  # posting lists of each term
+                for pos in _index[term][doc]:
                     line += f"({doc}, {pos}), "
 
             f.write(line[:-2].encode("utf8"))
@@ -527,7 +541,7 @@ if __name__ == "__main__":
     ANALYZE = int(sys.argv[2])  # 0: None | 1: Heap's Law | 2: Zipf's Law
     SAMPLE_RATE = None
 
-    if ANALYZE:
+    if ANALYZE == 1:
         SAMPLE_RATE = int(sys.argv[3])
 
     want_load = input('Do you want to load an existing index file? (y/n): ')
@@ -544,11 +558,12 @@ if __name__ == "__main__":
     print(f'\nProcess completed in {str(end_time - start_time)}')
 
     if ANALYZE == 2:
-        _freq_words = pseudo_query(len(index), query_mode=5)
+        _freq_words = pseudo_query(str(len(index)), query_mode=5)
         _freq_words.reverse()
         freq_words = [f'{i},{str(w[1])}' for i, w in enumerate(_freq_words)]
 
-        with open(f'./zipf-{MODE}-{SAMPLE_RATE}.txt', 'w+') as zf:
+        with open(f'./zipf-{MODE}.txt', 'w+') as zf:
             zf.write('\n'.join(freq_words))
 
     ask_query()
+
